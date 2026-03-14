@@ -125,3 +125,81 @@ button {
   font-size: 0.85rem;
   color: #dc2626;
 }
+
+/* ── Job cards ────────────────────────────────────────────────── */
+#job-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.job-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  /* Fade + slide in from bottom */
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.job-card.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.job-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.job-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e1b2e;
+}
+
+.job-company {
+  font-size: 0.875rem;
+  color: #6D28D9;
+  font-weight: 500;
+}
+
+.job-reasons {
+  list-style: disc;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.job-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.job-salary {
+  font-size: 0.825rem;
+  color: #6b7280;
+}
+
+.job-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6D28D9;
+  text-decoration: none;
+}
+
+.job-link:hover {
+  text-decoration: underline;
+}
