@@ -120,18 +120,23 @@ meetMelodyBtn.addEventListener('click', async () => {
 
 async function startVoiceSession(sid) {
   // 1. Microphone access
+  console.log('[melody] requesting mic...');
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   } catch {
     throw new Error('Microphone access denied. Please allow mic access and try again.');
   }
+  console.log('[melody] mic granted');
 
   // 2. AudioContext + worklets
   audioCtx = new AudioContext();
   if (audioCtx.state === 'suspended') await audioCtx.resume();
+  console.log('[melody] AudioContext state:', audioCtx.state);
   await audioCtx.audioWorklet.addModule('audio-recorder-worklet.js');
+  console.log('[melody] recorder worklet loaded');
   await audioCtx.audioWorklet.addModule('audio-player-worklet.js');
+  console.log('[melody] player worklet loaded');
 
   // Recorder: mic → worklet
   const micSource = audioCtx.createMediaStreamSource(stream);
@@ -151,6 +156,7 @@ async function startVoiceSession(sid) {
   playerNode.connect(audioCtx.destination);
 
   // 3. WebSocket
+  console.log('[melody] opening WebSocket...');
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}/ws/${sid}`);
   ws.binaryType = 'arraybuffer';
