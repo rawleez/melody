@@ -84,6 +84,7 @@ button {
 #upload-btn {
   background: #6D28D9;
   color: #ffffff;
+  margin-top: 0.75rem;
 }
 
 #upload-btn:disabled {
