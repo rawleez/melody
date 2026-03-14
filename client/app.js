@@ -129,6 +129,7 @@ async function startVoiceSession(sid) {
 
   // 2. AudioContext + worklets
   audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
   await audioCtx.audioWorklet.addModule('audio-recorder-worklet.js');
   await audioCtx.audioWorklet.addModule('audio-player-worklet.js');
 
