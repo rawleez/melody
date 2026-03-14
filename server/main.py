@@ -68,7 +68,15 @@ async def websocket_session(websocket: WebSocket, session_id: str):
     adk_session_id = adk_session.id
 
     live_queue = LiveRequestQueue()
-    run_config = RunConfig(streaming_mode=StreamingMode.BIDI)
+    run_config = RunConfig(
+        streaming_mode=StreamingMode.BIDI,
+        response_modalities=["AUDIO"],
+        speech_config=genai_types.SpeechConfig(
+            voice_config=genai_types.VoiceConfig(
+                prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name="Aoede")
+            )
+        ),
+    )
 
     async def receive_audio():
         """Browser → LiveRequestQueue: forward raw PCM blobs."""
@@ -98,16 +106,31 @@ async def websocket_session(websocket: WebSocket, session_id: str):
 
                 # After each turn flush pending job cards from session state
                 if event.turn_complete:
-                    real_session = runner.session_service.sessions[
-                        runner.app_name
-                    ]["user"][adk_session_id]
-                    cards = real_session.state.pop("pending_cards", [])
-                    for card in cards:
-                        await websocket.send_text(
-                            json.dumps({"type": "job_card", **card})
-                        )
+                    try:
+                        real_session = runner.session_service.sessions[
+                            runner.app_name
+                        ]["user"][adk_session_id]
+                        cards = real_session.state.pop("pending_cards", [])
+                        for card in cards:
+                            await websocket.send_text(
+                                json.dumps({"type": "job_card", **card})
+                            )
+                    except (KeyError, AttributeError):
+                        pass  # state not yet populated or structure differs
         except WebSocketDisconnect:
             pass
+        except Exception as exc:
+            print(f"[send_events] error: {exc}", flush=True)
+            raise
+
+    # Kick off Melody's opening greeting — without this, BIDI mode waits
+    # for the user to speak first and the session appears stalled.
+    live_queue.send_content(
+        content=genai_types.Content(
+            role="user",
+            parts=[genai_types.Part(text="Hello")],
+        )
+    )
 
     recv_task = asyncio.create_task(receive_audio())
     send_task = asyncio.create_task(send_events())

@@ -98,14 +98,119 @@ function showCTA() {
   ctaSection.hidden = false;
 }
 
+// --- Voice session state ---
+let audioCtx = null;
+let recorderNode = null;
+let playerNode = null;
+let ws = null;
+
 // --- Meet Melody ---
-meetMelodyBtn.addEventListener('click', () => {
+meetMelodyBtn.addEventListener('click', async () => {
   if (!sessionId) return;
-  // Voice session wiring comes in issue #5.4 — placeholder for now
   meetMelodyBtn.textContent = 'Starting session…';
   meetMelodyBtn.disabled = true;
-  console.log('Starting voice session', { sessionId, resumeData });
+  try {
+    await startVoiceSession(sessionId);
+  } catch (err) {
+    showError('Could not start session: ' + err.message);
+    meetMelodyBtn.textContent = 'Try again';
+    meetMelodyBtn.disabled = false;
+  }
 });
+
+async function startVoiceSession(sid) {
+  // 1. Microphone access
+  console.log('[melody] requesting mic...');
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch {
+    throw new Error('Microphone access denied. Please allow mic access and try again.');
+  }
+  console.log('[melody] mic granted');
+
+  // 2. AudioContext + worklets
+  audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  console.log('[melody] AudioContext state:', audioCtx.state);
+  await audioCtx.audioWorklet.addModule('audio-recorder-worklet.js');
+  console.log('[melody] recorder worklet loaded');
+  await audioCtx.audioWorklet.addModule('audio-player-worklet.js');
+  console.log('[melody] player worklet loaded');
+
+  // Recorder: mic → worklet
+  const micSource = audioCtx.createMediaStreamSource(stream);
+  recorderNode = new AudioWorkletNode(audioCtx, 'audio-recorder-processor', {
+    processorOptions: { targetSampleRate: 16000 },
+  });
+  micSource.connect(recorderNode);
+  recorderNode.connect(audioCtx.destination); // keeps worklet alive; muted by default
+
+  // Player: worklet → speakers
+  playerNode = new AudioWorkletNode(audioCtx, 'audio-player-processor', {
+    processorOptions: { inputSampleRate: 24000, bufferSeconds: 30 },
+    numberOfInputs: 0,
+    numberOfOutputs: 1,
+    outputChannelCount: [1],
+  });
+  playerNode.connect(audioCtx.destination);
+
+  // 3. WebSocket
+  console.log('[melody] opening WebSocket...');
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/${sid}`);
+  ws.binaryType = 'arraybuffer';
+
+  ws.addEventListener('open', () => {
+    meetMelodyBtn.textContent = 'Listening…';
+    // Forward PCM chunks from recorder worklet → WebSocket
+    recorderNode.port.onmessage = (e) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(e.data); // ArrayBuffer (Int16 PCM 16kHz)
+      }
+    };
+  });
+
+  ws.addEventListener('message', (e) => {
+    if (e.data instanceof ArrayBuffer) {
+      // Binary frame: agent audio (Int16 PCM 24kHz) → player worklet
+      playerNode.port.postMessage(e.data, [e.data]);
+    } else if (typeof e.data === 'string') {
+      // Text frame: JSON event
+      let msg;
+      try { msg = JSON.parse(e.data); } catch { return; }
+      if (msg.type === 'job_card') {
+        renderJobCard(msg); // implemented in issue #6.1
+      }
+    }
+  });
+
+  ws.addEventListener('close', (e) => {
+    stopVoiceSession();
+    if (e.code !== 1000 && e.code !== 1001) {
+      showError('Connection closed unexpectedly (code ' + e.code + '). Refresh to try again.');
+    }
+  });
+
+  ws.addEventListener('error', () => {
+    stopVoiceSession();
+    showError('WebSocket error. Check your connection and try again.');
+  });
+}
+
+function stopVoiceSession() {
+  if (ws && ws.readyState < WebSocket.CLOSING) ws.close(1000);
+  ws = null;
+  if (recorderNode) { recorderNode.port.postMessage('stop'); recorderNode.disconnect(); recorderNode = null; }
+  if (playerNode) { playerNode.disconnect(); playerNode = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  meetMelodyBtn.textContent = 'Session ended';
+}
+
+// Stub — replaced by issue #6.1
+function renderJobCard(card) {
+  console.log('job_card received', card);
+}
 
 // --- Helpers ---
 function showError(msg) {

@@ -7,15 +7,6 @@ from google.genai import types
 from melody_agent.prompts import build_prompt
 from melody_agent.tools import build_job_query, emit_job_card
 
-_VOICE_CONFIG = types.GenerateContentConfig(
-    speech_config=types.SpeechConfig(
-        voice_config=types.VoiceConfig(
-            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Aoede")
-        )
-    )
-)
-
-
 def create_agent(resume_data: dict) -> Agent:
     """Instantiate Melody with resume data injected into the system prompt.
 
@@ -24,10 +15,9 @@ def create_agent(resume_data: dict) -> Agent:
     """
     return Agent(
         name="melody",
-        model="gemini-2.5-flash-native-audio-latest",
+        model="gemini-2.5-flash-native-audio-preview-12-2025",
         instruction=build_prompt(resume_data),
         tools=[google_search, build_job_query, emit_job_card],
-        generate_content_config=_VOICE_CONFIG,
     )
 
 
