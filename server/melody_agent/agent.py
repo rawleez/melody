@@ -35,7 +35,6 @@ def create_agent(resume_data: dict) -> Agent:
         name="melody",
         model="gemini-2.5-flash-native-audio-preview-12-2025",
         instruction=build_prompt(resume_data),
-<<<<<<< HEAD
         tools=[GoogleSearchTool(bypass_multi_tools_limit=True), build_job_query, emit_job_card],
         before_tool_callback=_before_tool,
         after_tool_callback=_after_tool,
