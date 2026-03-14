@@ -68,7 +68,15 @@ async def websocket_session(websocket: WebSocket, session_id: str):
     adk_session_id = adk_session.id
 
     live_queue = LiveRequestQueue()
-    run_config = RunConfig(streaming_mode=StreamingMode.BIDI)
+    run_config = RunConfig(
+        streaming_mode=StreamingMode.BIDI,
+        response_modalities=["AUDIO"],
+        speech_config=genai_types.SpeechConfig(
+            voice_config=genai_types.VoiceConfig(
+                prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name="Aoede")
+            )
+        ),
+    )
 
     async def receive_audio():
         """Browser → LiveRequestQueue: forward raw PCM blobs."""
