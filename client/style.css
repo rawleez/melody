@@ -1,0 +1,126 @@
+/* ── Reset & base ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f3ff;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #1e1b2e;
+}
+
+/* ── Card ─────────────────────────────────────────────────────── */
+.card {
+  background: #ffffff;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 24px rgba(109, 40, 217, 0.1);
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ── Wordmark & tagline ───────────────────────────────────────── */
+.logo {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #6D28D9;
+  letter-spacing: -0.5px;
+}
+
+.tagline {
+  margin-top: -1rem;
+  font-size: 0.95rem;
+  color: #6b7280;
+}
+
+/* ── Drop zone ────────────────────────────────────────────────── */
+#drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 2px dashed #c4b5fd;
+  border-radius: 0.75rem;
+  padding: 2rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+#drop-zone:hover,
+#drop-zone.drag-over {
+  border-color: #6D28D9;
+  background: #f5f3ff;
+  color: #6D28D9;
+}
+
+#file-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6D28D9;
+  word-break: break-all;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 0.625rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+#upload-btn {
+  background: #6D28D9;
+  color: #ffffff;
+}
+
+#upload-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#upload-btn:not(:disabled):hover { background: #5b21b6; }
+
+#meet-melody-btn {
+  background: #6D28D9;
+  color: #ffffff;
+  font-size: 1.05rem;
+}
+
+#meet-melody-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#meet-melody-btn:not(:disabled):hover { background: #5b21b6; }
+
+/* ── CTA section ──────────────────────────────────────────────── */
+#cta-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+#resume-summary {
+  font-size: 0.95rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+/* ── Error text ───────────────────────────────────────────────── */
+.error {
+  font-size: 0.85rem;
+  color: #dc2626;
+}
