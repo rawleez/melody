@@ -123,7 +123,10 @@ async function startVoiceSession(sid) {
   console.log('[melody] requesting mic...');
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false,
+    });
   } catch {
     throw new Error('Microphone access denied. Please allow mic access and try again.');
   }
@@ -163,10 +166,16 @@ async function startVoiceSession(sid) {
 
   ws.addEventListener('open', () => {
     meetMelodyBtn.textContent = 'Listening…';
-    // Forward PCM chunks from recorder worklet → WebSocket
+    // Forward PCM chunks from recorder worklet → WebSocket.
+    // On speech_start, flush the player ring buffer so stale audio from
+    // Melody's previous turn doesn't delay playback of the next response.
     recorderNode.port.onmessage = (e) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(e.data); // ArrayBuffer (Int16 PCM 16kHz)
+      if (e.data instanceof ArrayBuffer) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(e.data); // ArrayBuffer (Int16 PCM 16kHz)
+        }
+      } else if (e.data?.type === 'speech_start') {
+        if (playerNode) playerNode.port.postMessage('flush');
       }
     };
   });

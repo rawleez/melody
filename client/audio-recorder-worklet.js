@@ -44,21 +44,25 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
     const rms = Math.sqrt(sum / channel.length);
     const isSpeech = rms >= this._threshold;
 
+    const wasSpeaking = this._speaking;
     if (isSpeech) {
       this._speaking    = true;
       this._silentCount = 0;
     } else {
       this._silentCount++;
-    }
-
-    // Send while speaking, plus a short tail of silent frames after speech ends
-    const shouldSend = isSpeech ||
-      (this._speaking && this._silentCount <= this._padFrames);
-
-    if (!shouldSend) {
       if (this._silentCount > this._padFrames) this._speaking = false;
-      return true;
     }
+
+    // Notify main thread on leading edge of each speech burst so it can flush
+    // the player ring buffer and prevent stale audio backlog (barge-in support).
+    if (isSpeech && !wasSpeaking) {
+      this.port.postMessage({ type: 'speech_start' });
+    }
+
+    // Always send audio — including silence — so the server-side VAD in
+    // Gemini Live can detect end-of-speech and trigger a response. Gating
+    // transmission on the client side prevents the server from ever seeing
+    // the silence that signals the user has finished speaking.
 
     // --- Resample from AudioContext rate → 16 kHz (linear interpolation) ---
     const outLen = Math.floor(channel.length / this._ratio);
