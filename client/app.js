@@ -207,9 +207,43 @@ function stopVoiceSession() {
   meetMelodyBtn.textContent = 'Session ended';
 }
 
-// Stub — replaced by issue #6.1
+// --- Job card renderer ---
+const jobCardsSection = document.getElementById('job-cards');
+let jobCardCount = 0;
+
 function renderJobCard(card) {
-  console.log('job_card received', card);
+  if (jobCardCount >= 3) return;
+  jobCardCount++;
+
+  jobCardsSection.hidden = false;
+
+  const reasonsHTML = (card.reasons || [])
+    .slice(0, 3)
+    .map(r => `<li>${escapeHTML(r)}</li>`)
+    .join('');
+
+  const el = document.createElement('article');
+  el.className = 'job-card';
+  el.innerHTML =
+    `<div class="job-card-header">` +
+      `<h3 class="job-title">${escapeHTML(card.title)}</h3>` +
+      `<span class="job-company">${escapeHTML(card.company)}</span>` +
+    `</div>` +
+    `<ul class="job-reasons">${reasonsHTML}</ul>` +
+    `<div class="job-card-footer">` +
+      `<span class="job-salary">${escapeHTML(card.salary || 'Not listed')}</span>` +
+      `<a class="job-link" href="${escapeHTML(card.url)}" target="_blank" rel="noopener noreferrer">View posting</a>` +
+    `</div>`;
+
+  jobCardsSection.appendChild(el);
+  // Defer class add so CSS transition fires
+  requestAnimationFrame(() => el.classList.add('visible'));
+}
+
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = String(str ?? '');
+  return div.innerHTML;
 }
 
 // --- Helpers ---
