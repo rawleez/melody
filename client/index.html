@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Melody — Your AI Career Companion</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="card">
+    <h1 class="logo">Melody</h1>
+    <p class="tagline">Your AI-powered voice career companion.</p>
+
+    <!-- Upload section -->
+    <section id="upload-section">
+      <label id="drop-zone" for="resume-input">
+        <span id="drop-label">Drop your resume here or <u>browse</u></span>
+        <span id="file-name" hidden></span>
+        <input id="resume-input" type="file" accept=".pdf,.txt" hidden />
+      </label>
+
+      <button id="upload-btn" disabled>Upload Resume</button>
+      <p id="upload-error" class="error" hidden></p>
+    </section>
+
+    <!-- CTA revealed after successful upload -->
+    <section id="cta-section" hidden>
+      <p id="resume-summary"></p>
+      <button id="meet-melody-btn">Meet Melody</button>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
