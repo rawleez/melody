@@ -5,7 +5,7 @@ from google.adk.tools import google_search
 from google.genai import types
 
 from melody_agent.prompts import build_prompt
-from melody_agent.tools import emit_job_card
+from melody_agent.tools import build_job_query, emit_job_card
 
 _VOICE_CONFIG = types.GenerateContentConfig(
     speech_config=types.SpeechConfig(
@@ -26,7 +26,7 @@ def create_agent(resume_data: dict) -> Agent:
         name="melody",
         model="gemini-2.5-flash-native-audio-latest",
         instruction=build_prompt(resume_data),
-        tools=[google_search, emit_job_card],
+        tools=[google_search, build_job_query, emit_job_card],
         generate_content_config=_VOICE_CONFIG,
     )
 
