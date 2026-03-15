@@ -119,12 +119,24 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
     // Advance the ring buffer by exactly the integer number of input samples
     // consumed this quantum.  The fractional remainder carries over in _phase,
     // keeping total consumption perfectly in sync with the resampling ratio.
-    const totalAdvance = phase + outLen * ratio;
-    const intAdvance   = Math.floor(totalAdvance);
+    //
+    // During underruns, actualAdvance may be less than intAdvance (buffer
+    // drained before we could consume all desired samples).  In that case
+    // _phase must be set relative to actualAdvance — not intAdvance — so it
+    // reflects where _readPos actually landed.  Using intAdvance here would
+    // accumulate error across ~200 silence frames and corrupt the phase offset
+    // for the rest of the session (manifests as speedup when job audio floods in).
+    const totalAdvance  = phase + outLen * ratio;
+    const intAdvance    = Math.floor(totalAdvance);
     const actualAdvance = Math.min(intAdvance, available);
     this._readPos = (this._readPos + actualAdvance) % this._capacity;
     this._size   -= actualAdvance;
-    this._phase   = totalAdvance - intAdvance;
+    if (available === 0) {
+      // Complete underrun: reset phase so stale state doesn't persist.
+      this._phase = 0;
+    } else {
+      this._phase = totalAdvance - actualAdvance;
+    }
 
     // Mono → stereo: copy channel 0 to any additional output channels
     for (let ch = 1; ch < outputs[0].length; ch++) {
