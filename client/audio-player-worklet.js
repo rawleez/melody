@@ -34,6 +34,12 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
     this._readPos        = 0;
     this._size           = 0;
 
+    // Phase accumulator: fractional input-sample offset carried across quanta.
+    // Ensures each process() call advances the read pointer by exactly the right
+    // number of integer input samples rather than over-consuming by 1 per quantum
+    // (which would cause a constant ~1.56% speedup on long utterances).
+    this._phase          = 0;
+
     // Pre-allocate temp buffer for one process() block.
     // ratio = inputRate / contextRate; if ratio > 1 we need more input samples
     // than output samples per block.  +2 gives the interpolation tail plus slack.
@@ -50,6 +56,7 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
         this._writePos = 0;
         this._readPos  = 0;
         this._size     = 0;
+        this._phase    = 0;
       }
     };
   }
@@ -74,20 +81,24 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
 
     const outLen   = channel.length;                     // 128 frames (render quantum)
     const ratio    = this._inputRate / sampleRate;       // e.g. 24000/48000 = 0.5
-    const inNeeded = Math.ceil(outLen * ratio) + 1;      // +1 for interpolation tail
+    const phase    = this._phase;                        // fractional offset [0, 1)
 
-    // Pull inNeeded samples from ring buffer; zero-fill on underrun (silence)
+    // How many integer input samples to peek for interpolation:
+    //   last 'a' index = floor(phase + (outLen-1)*ratio)
+    //   need +1 for the 'b' interpolation tail, +1 to convert to count
+    const inNeeded = Math.floor(phase + (outLen - 1) * ratio) + 2;
+
+    // Peek inNeeded samples from the ring buffer without advancing readPos yet.
+    // We will advance by the integer number of samples consumed after interpolation.
     const available = Math.min(inNeeded, this._size);
     const underrun  = available < inNeeded;
 
     for (let i = 0; i < available; i++) {
-      this._temp[i] = this._ring[this._readPos];
-      this._readPos = (this._readPos + 1) % this._capacity;
+      this._temp[i] = this._ring[(this._readPos + i) % this._capacity];
     }
     for (let i = available; i < inNeeded; i++) {
       this._temp[i] = 0; // silence padding
     }
-    this._size -= available;
 
     // Notify main thread on leading edge of each underrun (not every block)
     if (underrun && !this._wasUnderrun) {
@@ -97,13 +108,23 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
 
     // Linear interpolation resample: inputRate → AudioContext sample rate
     for (let i = 0; i < outLen; i++) {
-      const pos  = i * ratio;
+      const pos  = phase + i * ratio;
       const idx  = Math.floor(pos);
       const frac = pos - idx;
       const a    = this._temp[idx];
       const b    = idx + 1 < inNeeded ? this._temp[idx + 1] : a;
       channel[i] = a + frac * (b - a);
     }
+
+    // Advance the ring buffer by exactly the integer number of input samples
+    // consumed this quantum.  The fractional remainder carries over in _phase,
+    // keeping total consumption perfectly in sync with the resampling ratio.
+    const totalAdvance = phase + outLen * ratio;
+    const intAdvance   = Math.floor(totalAdvance);
+    const actualAdvance = Math.min(intAdvance, available);
+    this._readPos = (this._readPos + actualAdvance) % this._capacity;
+    this._size   -= actualAdvance;
+    this._phase   = totalAdvance - intAdvance;
 
     // Mono → stereo: copy channel 0 to any additional output channels
     for (let ch = 1; ch < outputs[0].length; ch++) {
