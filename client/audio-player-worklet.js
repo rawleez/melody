@@ -49,6 +49,13 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
 
     this._wasUnderrun    = false;
 
+    // Prime gate: hold back playback until the buffer has at least 100 ms of
+    // audio.  Prevents cold-start underruns (session start, post-flush/barge-in)
+    // where Gemini floods frames faster than real-time but the worklet starts
+    // draining immediately, producing the chipmunk speedup effect.
+    this._primed         = false;
+    this._primeThreshold = Math.ceil(this._inputRate * 0.1); // 100 ms @ inputRate
+
     this.port.onmessage = (e) => {
       if (e.data instanceof ArrayBuffer) {
         this._enqueue(new Int16Array(e.data));
@@ -57,6 +64,7 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
         this._readPos  = 0;
         this._size     = 0;
         this._phase    = 0;
+        this._primed   = false; // re-arm prime gate after flush
       }
     };
   }
@@ -83,6 +91,16 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
   process(inputs, outputs) {
     const channel = outputs[0]?.[0];
     if (!channel) return true;
+
+    // Prime gate: output silence until the buffer reaches 100 ms fill.
+    // This prevents cold-start underruns from causing the chipmunk speedup.
+    if (!this._primed) {
+      if (this._size < this._primeThreshold) {
+        channel.fill(0);
+        return true;
+      }
+      this._primed = true;
+    }
 
     const outLen   = channel.length;                     // 128 frames (render quantum)
     const ratio    = this._inputRate / sampleRate;       // e.g. 24000/48000 = 0.5
@@ -125,22 +143,21 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
     // consumed this quantum.  The fractional remainder carries over in _phase,
     // keeping total consumption perfectly in sync with the resampling ratio.
     //
-    // When underrun occurs (actualAdvance < intAdvance), _phase must be set
-    // relative to actualAdvance (where _readPos actually landed), not intAdvance
-    // (where it would have landed without clamping).  Using intAdvance here
-    // accumulates (intAdvance - actualAdvance) samples of phantom phase per
-    // underrun frame; after ~200 frames of tool-call silence this causes
-    // sustained speedup when audio floods back in for job reading.
+    // On any underrun (partial or complete), reset _phase = 0.
     //
-    // On complete underrun (available === 0), reset to 0 — there is no sensible
-    // fractional offset to carry when the buffer is entirely empty, and leaving a
-    // large accumulated value would cause _readPos to skip far into the next burst.
+    // Why: during partial underrun (0 < available < intAdvance), carrying
+    // totalAdvance - available as the new phase produces a value >> 1
+    // (e.g. 54 when available=10, intAdvance=64).  On the next call the
+    // interpolation loop starts at pos=54 inside _temp, silently skipping
+    // the first 54 valid ring-buffer samples — the chipmunk speedup.
+    // Resetting to 0 is correct: the silence gap already filled the temporal
+    // hole; the next burst should start from position 0 in the buffer.
     const totalAdvance  = phase + outLen * ratio;
     const intAdvance    = Math.floor(totalAdvance);
     const actualAdvance = Math.min(intAdvance, available);
     this._readPos = (this._readPos + actualAdvance) % this._capacity;
     this._size   -= actualAdvance;
-    this._phase   = available === 0 ? 0 : totalAdvance - actualAdvance;
+    this._phase   = underrun ? 0 : totalAdvance - intAdvance;
 
     // Mono → stereo: copy channel 0 to any additional output channels
     for (let ch = 1; ch < outputs[0].length; ch++) {
