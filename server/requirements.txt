@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-google-genai
-google-adk
+google-genai==1.66.0
+google-adk==1.22.1
 python-multipart
 python-dotenv
