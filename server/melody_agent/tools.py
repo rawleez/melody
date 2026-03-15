@@ -3,10 +3,11 @@
 from google.adk.tools import ToolContext
 
 
-def build_job_query(state: dict) -> str:
+def build_job_query(tool_context: ToolContext, state: dict) -> dict:
     """Build a Google search query for job postings from conversation state.
 
     Args:
+        tool_context: ADK tool context (required for Live session routing).
         state: Accumulated session state with keys:
             - role_type (str): e.g. "senior product manager"
             - location (str): e.g. "remote" or "New York"
@@ -14,8 +15,8 @@ def build_job_query(state: dict) -> str:
             - anti_priorities (list[str]): dealbreakers (excluded via '-' prefix)
 
     Returns:
-        A query string ready to pass to google_search.
-        Example: "senior product manager remote SaaS fintech job posting 2026"
+        Dict with 'query' key containing the search query string.
+        Example: {"query": "senior product manager remote SaaS fintech job posting 2026"}
     """
     parts = []
 
@@ -36,7 +37,7 @@ def build_job_query(state: dict) -> str:
     if exclusions:
         parts.append(exclusions)
 
-    return " ".join(parts)
+    return {"query": " ".join(parts)}
 
 
 def emit_job_card(

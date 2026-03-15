@@ -106,6 +106,10 @@ let ws = null;
 
 // --- Meet Melody ---
 meetMelodyBtn.addEventListener('click', async () => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    stopVoiceSession();
+    return;
+  }
   if (!sessionId) return;
   meetMelodyBtn.textContent = 'Starting session…';
   meetMelodyBtn.disabled = true;
@@ -165,7 +169,8 @@ async function startVoiceSession(sid) {
   ws.binaryType = 'arraybuffer';
 
   ws.addEventListener('open', () => {
-    meetMelodyBtn.textContent = 'Listening…';
+    meetMelodyBtn.textContent = 'End session';
+    meetMelodyBtn.disabled = false;
     // Forward PCM chunks from recorder worklet → WebSocket.
     // On speech_start, flush the player ring buffer so stale audio from
     // Melody's previous turn doesn't delay playback of the next response.

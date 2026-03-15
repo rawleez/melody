@@ -74,7 +74,7 @@ async def websocket_session(websocket: WebSocket, session_id: str):
     live_queue = LiveRequestQueue()
     run_config = RunConfig(
         streaming_mode=StreamingMode.BIDI,
-        response_modalities=["AUDIO"],
+        response_modalities=[genai_types.Modality.AUDIO],
     )
 
     async def receive_audio():
