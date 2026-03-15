@@ -134,12 +134,16 @@ button {
 }
 
 .job-card {
-  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-left: 4px solid #6D28D9;
   border-radius: 0.75rem;
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  max-width: 480px;
+  width: 100%;
+  margin-inline: auto;
   /* Fade + slide in from bottom */
   opacity: 0;
   transform: translateY(16px);
@@ -165,7 +169,7 @@ button {
 
 .job-company {
   font-size: 0.875rem;
-  color: #6D28D9;
+  color: #1e1b2e;
   font-weight: 500;
 }
 
@@ -175,8 +179,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-size: 0.875rem;
-  color: #374151;
+  font-size: 0.8125rem;
+  color: #6b7280;
   line-height: 1.5;
 }
 
@@ -197,9 +201,9 @@ button {
   font-size: 0.85rem;
   font-weight: 600;
   color: #6D28D9;
-  text-decoration: none;
+  text-decoration: underline;
 }
 
 .job-link:hover {
-  text-decoration: underline;
+  color: #5b21b6;
 }
