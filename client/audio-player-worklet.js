@@ -11,6 +11,8 @@
  * Constructor processorOptions:
  *   inputSampleRate  {number}  PCM rate of incoming data (default: 24000)
  *   bufferSeconds    {number}  Ring buffer size in seconds (default: 4)
+ *   minBufferMs      {number}  Minimum fill (ms) before playback begins after a cold
+ *                              start or flush; prevents cold-start speedup (default: 150)
  *
  * Messages FROM main thread:
  *   ArrayBuffer  — Int16 PCM samples to enqueue
@@ -26,6 +28,7 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
     const opts           = options.processorOptions ?? {};
     this._inputRate      = opts.inputSampleRate ?? 24000;
     const bufSeconds     = opts.bufferSeconds   ?? 4;
+    const minBufferMs    = opts.minBufferMs      ?? 150;
 
     // Ring buffer stores Float32 samples at the input rate
     this._capacity       = Math.ceil(this._inputRate * bufSeconds);
@@ -33,6 +36,12 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
     this._writePos       = 0;
     this._readPos        = 0;
     this._size           = 0;
+
+    // Minimum fill threshold: hold silence until this many samples are buffered.
+    // Prevents cold-start / post-flush chipmunk speedup caused by the worklet
+    // draining while the ring buffer is still filling from the first Gemini burst.
+    this._minFill        = Math.ceil(this._inputRate * minBufferMs / 1000);
+    this._prebuffering   = true;
 
     // Pre-allocate temp buffer for one process() block.
     // ratio = inputRate / contextRate; if ratio > 1 we need more input samples
@@ -47,9 +56,10 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
       if (e.data instanceof ArrayBuffer) {
         this._enqueue(new Int16Array(e.data));
       } else if (e.data === 'flush') {
-        this._writePos = 0;
-        this._readPos  = 0;
-        this._size     = 0;
+        this._writePos     = 0;
+        this._readPos      = 0;
+        this._size         = 0;
+        this._prebuffering = true; // re-arm threshold after flush to prevent post-flush speedup
       }
     };
   }
@@ -71,6 +81,18 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
   process(inputs, outputs) {
     const channel = outputs[0]?.[0];
     if (!channel) return true;
+
+    // Prebuffering guard: hold silence until the ring buffer reaches the minimum
+    // fill threshold. This prevents the cold-start / post-flush chipmunk speedup
+    // that occurs when Gemini delivers frames faster than real-time and the worklet
+    // starts draining an almost-empty buffer.
+    if (this._prebuffering) {
+      if (this._size < this._minFill) {
+        channel.fill(0);
+        return true;
+      }
+      this._prebuffering = false;
+    }
 
     const outLen   = channel.length;                     // 128 frames (render quantum)
     const ratio    = this._inputRate / sampleRate;       // e.g. 24000/48000 = 0.5

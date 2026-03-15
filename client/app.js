@@ -155,7 +155,7 @@ async function startVoiceSession(sid) {
 
   // Player: worklet → speakers
   playerNode = new AudioWorkletNode(audioCtx, 'audio-player-processor', {
-    processorOptions: { inputSampleRate: 24000, bufferSeconds: 30 },
+    processorOptions: { inputSampleRate: 24000, bufferSeconds: 30, minBufferMs: 150 },
     numberOfInputs: 0,
     numberOfOutputs: 1,
     outputChannelCount: [1],
