@@ -65,9 +65,14 @@ class AudioPlayerProcessor extends AudioWorkletProcessor {
   _enqueue(samples) {
     for (let i = 0; i < samples.length; i++) {
       if (this._size >= this._capacity) {
-        // Overflow: drop oldest sample to make room for fresh audio
+        // Overflow: drop oldest sample to make room for fresh audio.
+        // Reset _phase so the interpolation offset stays coherent with the
+        // new _readPos origin — without this, process() uses a stale phase
+        // that no longer corresponds to the actual buffer position, causing
+        // audible speedup during long audio bursts (e.g. job-reading).
         this._readPos = (this._readPos + 1) % this._capacity;
         this._size--;
+        this._phase = 0;
       }
       this._ring[this._writePos] = samples[i] / 32768.0;
       this._writePos = (this._writePos + 1) % this._capacity;
