@@ -148,7 +148,11 @@ async function startVoiceSession(sid) {
   // Recorder: mic → worklet
   const micSource = audioCtx.createMediaStreamSource(stream);
   recorderNode = new AudioWorkletNode(audioCtx, 'audio-recorder-processor', {
-    processorOptions: { targetSampleRate: 16000 },
+    processorOptions: {
+      targetSampleRate:    16000,
+      silenceThreshold:    0.03,  // ~-30 dBFS; rejects background noise while catching speech
+      speechConfirmFrames: 3,     // debounce: require 3 consecutive frames before speech_start
+    },
   });
   micSource.connect(recorderNode);
   recorderNode.connect(audioCtx.destination); // keeps worklet alive; muted by default

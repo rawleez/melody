@@ -6,24 +6,28 @@
  * for forwarding over WebSocket.
  *
  * Constructor processorOptions:
- *   targetSampleRate  {number}  Target sample rate in Hz (default: 16000)
- *   silenceThreshold  {number}  RMS level below which a frame is "silent" (default: 0.01)
- *   silencePadFrames  {number}  Silent frames to include after speech ends (default: 8)
+ *   targetSampleRate   {number}  Target sample rate in Hz (default: 16000)
+ *   silenceThreshold   {number}  RMS level below which a frame is "silent" (default: 0.03)
+ *   silencePadFrames   {number}  Silent frames to include after speech ends (default: 8)
+ *   speechConfirmFrames {number} Consecutive above-threshold frames required before
+ *                                firing speech_start, to reject short transients (default: 3)
  */
 class AudioRecorderProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
 
     const opts = options.processorOptions ?? {};
-    this._targetRate     = opts.targetSampleRate ?? 16000;
-    this._threshold      = opts.silenceThreshold ?? 0.01;
-    this._padFrames      = opts.silencePadFrames ?? 8;   // trailing silence kept
+    this._targetRate         = opts.targetSampleRate    ?? 16000;
+    this._threshold          = opts.silenceThreshold    ?? 0.03;
+    this._padFrames          = opts.silencePadFrames    ?? 8;    // trailing silence kept
+    this._confirmFrames      = opts.speechConfirmFrames ?? 3;    // debounce transients
 
     // sampleRate is a global in AudioWorkletGlobalScope
-    this._ratio          = sampleRate / this._targetRate;
+    this._ratio              = sampleRate / this._targetRate;
 
-    this._silentCount    = 0;   // consecutive silent frames seen
-    this._speaking       = false;
+    this._silentCount        = 0;   // consecutive silent frames seen
+    this._aboveThreshCount   = 0;   // consecutive above-threshold frames seen
+    this._speaking           = false;
 
     // Listen for stop signal from main thread
     this.port.onmessage = (e) => {
@@ -46,16 +50,22 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
 
     const wasSpeaking = this._speaking;
     if (isSpeech) {
-      this._speaking    = true;
+      this._aboveThreshCount++;
       this._silentCount = 0;
+      // Require N consecutive above-threshold frames before declaring speech,
+      // so short transients (keyboard taps, chair scrapes) are ignored.
+      if (this._aboveThreshCount >= this._confirmFrames) {
+        this._speaking = true;
+      }
     } else {
+      this._aboveThreshCount = 0;
       this._silentCount++;
       if (this._silentCount > this._padFrames) this._speaking = false;
     }
 
     // Notify main thread on leading edge of each speech burst so it can flush
     // the player ring buffer and prevent stale audio backlog (barge-in support).
-    if (isSpeech && !wasSpeaking) {
+    if (this._speaking && !wasSpeaking) {
       this.port.postMessage({ type: 'speech_start' });
     }
 
