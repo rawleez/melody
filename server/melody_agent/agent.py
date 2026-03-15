@@ -17,11 +17,28 @@ def _before_tool(tool, args, tool_context):
     return None
 
 
+_SEARCH_RESULT_CHAR_LIMIT = 3000
+
+
 def _after_tool(tool, args, tool_context, tool_response):
-    """Log tool call completion with elapsed time."""
+    """Log tool call completion with elapsed time.
+
+    For google_search: truncate the raw result string to avoid overflowing the
+    native audio model's context window (which causes a WebSocket 1011 crash).
+    """
     start = tool_context.state.get(f"_tool_start_{tool.name}", time.time())
     elapsed = time.time() - start
     print(f"[tool] {tool.name} END   | elapsed={elapsed:.1f}s", flush=True)
+
+    if tool.name == "google_search" and isinstance(tool_response, str):
+        if len(tool_response) > _SEARCH_RESULT_CHAR_LIMIT:
+            print(
+                f"[tool] google_search truncating response "
+                f"{len(tool_response)} → {_SEARCH_RESULT_CHAR_LIMIT} chars",
+                flush=True,
+            )
+            return tool_response[:_SEARCH_RESULT_CHAR_LIMIT]
+
     return None
 
 
