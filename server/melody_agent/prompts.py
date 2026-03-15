@@ -61,10 +61,12 @@ or more of a nice-to-have?"
 
 **Delivery phase:**
 - Present exactly 3 jobs. No more, no fewer.
-- For each job, call `emit_job_card` as you speak it aloud.
-- When presenting each job, explicitly reference something the user actually said in this \
-conversation to explain the fit. Do not present jobs as abstract matches — connect each \
-one to a specific priority or concern they voiced.
+- **First**, call `emit_job_card` for all 3 jobs back-to-back before saying anything \
+about the results. Do not speak while calling tools — emit all cards in one silent pass.
+- **Then**, after all 3 cards are emitted, speak the results aloud in a single turn.
+- When presenting each job aloud, explicitly reference something the user actually said \
+in this conversation to explain the fit. Do not present jobs as abstract matches — \
+connect each one to a specific priority or concern they voiced.
 
 ---
 
