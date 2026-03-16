@@ -75,6 +75,10 @@ async def websocket_session(websocket: WebSocket, session_id: str):
     live_queue = LiveRequestQueue()
     run_config = RunConfig(
         streaming_mode=StreamingMode.BIDI,
+        context_window_compression=genai_types.ContextWindowCompressionConfig(
+            sliding_window=genai_types.SlidingWindow(target_tokens=20000),
+            trigger_tokens=25000,
+        ),
     )
 
     async def receive_audio():
