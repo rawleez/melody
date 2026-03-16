@@ -1,6 +1,7 @@
 """Melody ADK agent definition."""
 
 import time
+import urllib.parse
 
 from google.adk.agents import Agent
 from google.adk.tools import google_search
@@ -14,6 +15,20 @@ def _before_tool(tool, args, tool_context):
     """Log tool call start and record timestamp for elapsed-time tracking."""
     tool_context.state[f"_tool_start_{tool.name}"] = time.time()
     print(f"[tool] {tool.name} START | args={args}", flush=True)
+
+    if tool.name == "emit_job_card":
+        url = args.get("url", "")
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme != "https" or not parsed.netloc or parsed.path in ("", "/"):
+            return {
+                "error": (
+                    f"Invalid url '{url}'. Must be a full https:// job posting URL "
+                    "copied verbatim from a google_search result (e.g. "
+                    "https://www.indeed.com/viewjob?jk=abc123). "
+                    "Run google_search first and use a URL from the results."
+                )
+            }
+
     return None
 
 
