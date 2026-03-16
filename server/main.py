@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import os
 import uuid
@@ -82,18 +83,23 @@ async def websocket_session(websocket: WebSocket, session_id: str):
     )
 
     async def receive_audio():
-        """Browser → LiveRequestQueue: forward raw PCM blobs."""
+        """Browser → LiveRequestQueue: decode base64 JSON envelope and forward PCM."""
         try:
             while True:
-                data = await websocket.receive_bytes()
+                text = await websocket.receive_text()
+                try:
+                    msg = json.loads(text)
+                    pcm_data = base64.b64decode(msg["data"])
+                except (json.JSONDecodeError, KeyError, Exception):
+                    continue  # drop malformed frames
                 live_queue.send_realtime(
-                    genai_types.Blob(data=data, mime_type="audio/pcm;rate=16000")
+                    genai_types.Blob(data=pcm_data, mime_type="audio/pcm;rate=16000")
                 )
         except WebSocketDisconnect:
             live_queue.close()
 
     async def send_events():
-        """ADK events → browser: audio chunks and job cards."""
+        """ADK events → browser: base64 JSON audio envelope and job cards."""
         try:
             async for event in runner.run_live(
                 user_id="user",
@@ -101,11 +107,23 @@ async def websocket_session(websocket: WebSocket, session_id: str):
                 live_request_queue=live_queue,
                 run_config=run_config,
             ):
-                # Forward agent audio as binary frames
+                # Collect audio parts and send as a single JSON envelope
+                audio_parts = []
                 if event.content and event.content.parts:
                     for part in event.content.parts:
                         if part.inline_data and part.inline_data.data:
-                            await websocket.send_bytes(part.inline_data.data)
+                            audio_parts.append({
+                                "type": "audio/pcm",
+                                "data": base64.b64encode(part.inline_data.data).decode("ascii"),
+                            })
+
+                if audio_parts or event.turn_complete or getattr(event, "interrupted", False):
+                    envelope: dict = {
+                        "parts": audio_parts,
+                        "turn_complete": bool(event.turn_complete),
+                        "interrupted": bool(getattr(event, "interrupted", False)),
+                    }
+                    await websocket.send_text(json.dumps(envelope))
 
                 # After each turn flush pending job cards from session state
                 if event.turn_complete:
