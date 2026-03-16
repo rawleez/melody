@@ -22,10 +22,11 @@ def _before_tool(tool, args, tool_context):
         if parsed.scheme != "https" or not parsed.netloc or parsed.path in ("", "/"):
             return {
                 "error": (
-                    f"Invalid url '{url}'. Must be a full https:// job posting URL "
+                    f"Invalid url '{url}'. The url must be a full https:// job posting URL "
                     "copied verbatim from a google_search result (e.g. "
                     "https://www.indeed.com/viewjob?jk=abc123). "
-                    "Run google_search first and use a URL from the results."
+                    "Do not retry this job — skip it and pick a different job from the "
+                    "search results that has a full posting URL."
                 )
             }
 
