@@ -98,6 +98,21 @@ function showCTA() {
   ctaSection.hidden = false;
 }
 
+// --- Base64 ↔ ArrayBuffer utilities (for WebSocket audio protocol) ---
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
 // --- Voice session state ---
 let audioCtxRecorder = null;
 let audioCtxPlayer   = null;  // fixed 24 kHz — never closed, only suspended
@@ -176,18 +191,18 @@ async function startVoiceSession(sid) {
   console.log('[melody] opening WebSocket...');
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}/ws/${sid}`);
-  ws.binaryType = 'arraybuffer';
 
   ws.addEventListener('open', () => {
     meetMelodyBtn.textContent = 'End session';
     meetMelodyBtn.disabled = false;
-    // Forward PCM chunks from recorder worklet → WebSocket.
+    // Forward PCM chunks from recorder worklet → WebSocket as base64 JSON.
     // On speech_start, flush the player ring buffer so stale audio from
     // Melody's previous turn doesn't delay playback of the next response.
     recorderNode.port.onmessage = (e) => {
       if (e.data?.type === 'audio_data') {
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(e.data.buffer); // ArrayBuffer (Int16 PCM 16kHz)
+          const base64 = arrayBufferToBase64(e.data.buffer);
+          ws.send(JSON.stringify({ mime_type: 'audio/pcm', data: base64 }));
         }
       } else if (e.data?.type === 'speech_start') {
         if (playerNode) playerNode.port.postMessage({ type: 'flush' });
@@ -198,16 +213,26 @@ async function startVoiceSession(sid) {
   });
 
   ws.addEventListener('message', (e) => {
-    if (e.data instanceof ArrayBuffer) {
-      // Binary frame: agent audio (Int16 PCM 24kHz) → player worklet
-      playerNode.port.postMessage({ type: 'audio_data', buffer: e.data }, [e.data]);
-    } else if (typeof e.data === 'string') {
-      // Text frame: JSON event
-      let msg;
-      try { msg = JSON.parse(e.data); } catch { return; }
-      if (msg.type === 'job_card') {
-        renderJobCard(msg); // implemented in issue #6.1
+    if (typeof e.data !== 'string') return;
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+
+    // Audio + control envelope from agent
+    if (msg.parts) {
+      for (const part of msg.parts) {
+        if ((part.type === 'audio/pcm' || part.mime_type === 'audio/pcm') && part.data) {
+          const buffer = base64ToArrayBuffer(part.data);
+          playerNode.port.postMessage({ type: 'audio_data', buffer }, [buffer]);
+        }
       }
+    }
+    // Barge-in: agent was interrupted — flush buffered playback immediately
+    if (msg.interrupted) {
+      if (playerNode) playerNode.port.postMessage({ type: 'flush' });
+    }
+    // Job card event — sent as a separate frame by the server
+    if (msg.type === 'job_card') {
+      renderJobCard(msg);
     }
   });
 
