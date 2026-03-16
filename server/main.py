@@ -114,7 +114,6 @@ async def websocket_session(websocket: WebSocket, session_id: str):
                 streaming_mode=StreamingMode.BIDI,
                 session_resumption=genai_types.SessionResumptionConfig(
                     handle=resumption_handle[0],
-                    transparent=True,
                 ),
                 context_window_compression=genai_types.ContextWindowCompressionConfig(
                     sliding_window=genai_types.SlidingWindow(target_tokens=20000),
