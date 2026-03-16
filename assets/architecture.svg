@@ -92,10 +92,6 @@
   <text x="630" y="288" text-anchor="middle" fill="#cbd5e1" font-size="11">emit_job_card</text>
   <text x="630" y="304" text-anchor="middle" fill="#64748b" font-size="10">writes → pending_cards</text>
 
-  <!-- ContextWindowCompression note -->
-  <rect x="546" y="338" width="168" height="40" rx="5" fill="#0f172a" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>
-  <text x="630" y="356" text-anchor="middle" fill="#64748b" font-size="10">ContextWindowCompression</text>
-  <text x="630" y="371" text-anchor="middle" fill="#64748b" font-size="10">trigger=25k / target=20k tokens</text>
 
   <!-- ───────────────────────────────────────────────────────────
        EXTERNAL SERVICES box
