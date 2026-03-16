@@ -138,12 +138,17 @@ async function startVoiceSession(sid) {
   console.log('[melody] mic granted');
 
   // 2. AudioContext + worklets
-  // Recorder context: default device rate (browser chooses)
-  audioCtxRecorder = new AudioContext();
+  // Recorder context: fixed 16 kHz so the worklet's hardcoded sampleRate=16000 is correct —
+  // this is the key fix for VAD timing and removes the need for in-worklet resampling.
+  // Create once, suspend on stop (closing + recreating causes Chrome to silently fail
+  // when re-adding the worklet module on the next session start).
+  if (!audioCtxRecorder) {
+    audioCtxRecorder = new AudioContext({ sampleRate: 16000 });
+    await audioCtxRecorder.audioWorklet.addModule('audio-recorder-worklet.js');
+    console.log('[melody] recorder worklet loaded');
+  }
   if (audioCtxRecorder.state === 'suspended') await audioCtxRecorder.resume();
   console.log('[melody] recorder AudioContext state:', audioCtxRecorder.state);
-  await audioCtxRecorder.audioWorklet.addModule('audio-recorder-worklet.js');
-  console.log('[melody] recorder worklet loaded');
 
   // Player context: fixed 24 kHz to match Gemini output — create once, suspend on stop
   if (!audioCtxPlayer) {
@@ -155,13 +160,7 @@ async function startVoiceSession(sid) {
 
   // Recorder: mic → worklet
   const micSource = audioCtxRecorder.createMediaStreamSource(stream);
-  recorderNode = new AudioWorkletNode(audioCtxRecorder, 'audio-recorder-processor', {
-    processorOptions: {
-      targetSampleRate:    16000,
-      silenceThreshold:    0.03,  // ~-30 dBFS; rejects background noise while catching speech
-      speechConfirmFrames: 3,     // debounce: require 3 consecutive frames before speech_start
-    },
-  });
+  recorderNode = new AudioWorkletNode(audioCtxRecorder, 'audio-recorder-processor');
   micSource.connect(recorderNode);
   recorderNode.connect(audioCtxRecorder.destination); // keeps worklet alive; muted by default
 
@@ -186,12 +185,14 @@ async function startVoiceSession(sid) {
     // On speech_start, flush the player ring buffer so stale audio from
     // Melody's previous turn doesn't delay playback of the next response.
     recorderNode.port.onmessage = (e) => {
-      if (e.data instanceof ArrayBuffer) {
+      if (e.data?.type === 'audio_data') {
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(e.data); // ArrayBuffer (Int16 PCM 16kHz)
+          ws.send(e.data.buffer); // ArrayBuffer (Int16 PCM 16kHz)
         }
       } else if (e.data?.type === 'speech_start') {
         if (playerNode) playerNode.port.postMessage({ type: 'flush' });
+      } else if (e.data?.type === 'speech_end') {
+        // speech_end: user stopped talking — clear any speaking UI state here if added later
       }
     };
   });
@@ -226,11 +227,11 @@ async function startVoiceSession(sid) {
 function stopVoiceSession() {
   if (ws && ws.readyState < WebSocket.CLOSING) ws.close(1000);
   ws = null;
-  if (recorderNode) { recorderNode.port.postMessage('stop'); recorderNode.disconnect(); recorderNode = null; }
+  if (recorderNode) { recorderNode.disconnect(); recorderNode = null; }
   if (playerNode) { playerNode.disconnect(); playerNode = null; }
-  if (audioCtxRecorder) { audioCtxRecorder.close(); audioCtxRecorder = null; }
-  // Suspend (not close) player context — closing and recreating causes Chrome to silently
-  // fail when re-adding the worklet module on the next session start.
+  // Suspend (not close) both contexts — closing and recreating causes Chrome to silently
+  // fail when re-adding a worklet module on the next session start.
+  if (audioCtxRecorder) audioCtxRecorder.suspend();
   if (audioCtxPlayer) audioCtxPlayer.suspend();
   meetMelodyBtn.textContent = 'Session ended';
 }
