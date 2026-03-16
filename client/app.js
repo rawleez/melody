@@ -99,7 +99,8 @@ function showCTA() {
 }
 
 // --- Voice session state ---
-let audioCtx = null;
+let audioCtxRecorder = null;
+let audioCtxPlayer   = null;  // fixed 24 kHz — never closed, only suspended
 let recorderNode = null;
 let playerNode = null;
 let ws = null;
@@ -137,17 +138,24 @@ async function startVoiceSession(sid) {
   console.log('[melody] mic granted');
 
   // 2. AudioContext + worklets
-  audioCtx = new AudioContext();
-  if (audioCtx.state === 'suspended') await audioCtx.resume();
-  console.log('[melody] AudioContext state:', audioCtx.state);
-  await audioCtx.audioWorklet.addModule('audio-recorder-worklet.js');
+  // Recorder context: default device rate (browser chooses)
+  audioCtxRecorder = new AudioContext();
+  if (audioCtxRecorder.state === 'suspended') await audioCtxRecorder.resume();
+  console.log('[melody] recorder AudioContext state:', audioCtxRecorder.state);
+  await audioCtxRecorder.audioWorklet.addModule('audio-recorder-worklet.js');
   console.log('[melody] recorder worklet loaded');
-  await audioCtx.audioWorklet.addModule('audio-player-worklet.js');
-  console.log('[melody] player worklet loaded');
+
+  // Player context: fixed 24 kHz to match Gemini output — create once, suspend on stop
+  if (!audioCtxPlayer) {
+    audioCtxPlayer = new AudioContext({ sampleRate: 24000 });
+    await audioCtxPlayer.audioWorklet.addModule('audio-player-worklet.js');
+    console.log('[melody] player worklet loaded');
+  }
+  if (audioCtxPlayer.state === 'suspended') await audioCtxPlayer.resume();
 
   // Recorder: mic → worklet
-  const micSource = audioCtx.createMediaStreamSource(stream);
-  recorderNode = new AudioWorkletNode(audioCtx, 'audio-recorder-processor', {
+  const micSource = audioCtxRecorder.createMediaStreamSource(stream);
+  recorderNode = new AudioWorkletNode(audioCtxRecorder, 'audio-recorder-processor', {
     processorOptions: {
       targetSampleRate:    16000,
       silenceThreshold:    0.03,  // ~-30 dBFS; rejects background noise while catching speech
@@ -155,16 +163,15 @@ async function startVoiceSession(sid) {
     },
   });
   micSource.connect(recorderNode);
-  recorderNode.connect(audioCtx.destination); // keeps worklet alive; muted by default
+  recorderNode.connect(audioCtxRecorder.destination); // keeps worklet alive; muted by default
 
-  // Player: worklet → speakers
-  playerNode = new AudioWorkletNode(audioCtx, 'audio-player-processor', {
-    processorOptions: { inputSampleRate: 24000, bufferSeconds: 30 },
+  // Player: worklet → speakers (no processorOptions — ClearRight worklet uses none)
+  playerNode = new AudioWorkletNode(audioCtxPlayer, 'audio-player-processor', {
     numberOfInputs: 0,
     numberOfOutputs: 1,
     outputChannelCount: [1],
   });
-  playerNode.connect(audioCtx.destination);
+  playerNode.connect(audioCtxPlayer.destination);
 
   // 3. WebSocket
   console.log('[melody] opening WebSocket...');
@@ -184,7 +191,7 @@ async function startVoiceSession(sid) {
           ws.send(e.data); // ArrayBuffer (Int16 PCM 16kHz)
         }
       } else if (e.data?.type === 'speech_start') {
-        if (playerNode) playerNode.port.postMessage('flush');
+        if (playerNode) playerNode.port.postMessage({ type: 'flush' });
       }
     };
   });
@@ -192,7 +199,7 @@ async function startVoiceSession(sid) {
   ws.addEventListener('message', (e) => {
     if (e.data instanceof ArrayBuffer) {
       // Binary frame: agent audio (Int16 PCM 24kHz) → player worklet
-      playerNode.port.postMessage(e.data, [e.data]);
+      playerNode.port.postMessage({ type: 'audio_data', buffer: e.data }, [e.data]);
     } else if (typeof e.data === 'string') {
       // Text frame: JSON event
       let msg;
@@ -221,7 +228,10 @@ function stopVoiceSession() {
   ws = null;
   if (recorderNode) { recorderNode.port.postMessage('stop'); recorderNode.disconnect(); recorderNode = null; }
   if (playerNode) { playerNode.disconnect(); playerNode = null; }
-  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  if (audioCtxRecorder) { audioCtxRecorder.close(); audioCtxRecorder = null; }
+  // Suspend (not close) player context — closing and recreating causes Chrome to silently
+  // fail when re-adding the worklet module on the next session start.
+  if (audioCtxPlayer) audioCtxPlayer.suspend();
   meetMelodyBtn.textContent = 'Session ended';
 }
 
