@@ -83,9 +83,6 @@ async def websocket_session(websocket: WebSocket, session_id: str):
     # even after a reconnect swaps it out.
     queue_ref: list[LiveRequestQueue] = [LiveRequestQueue()]
 
-    # Latest resumable session handle from Google (updated as events arrive).
-    resumption_handle: list[str | None] = [None]
-
     async def receive_audio():
         """Browser → LiveRequestQueue: decode base64 JSON envelope and forward PCM."""
         try:
@@ -105,20 +102,13 @@ async def websocket_session(websocket: WebSocket, session_id: str):
     async def send_events():
         """ADK events → browser: base64 JSON audio envelope and job cards.
 
-        Retries up to _MAX_RECONNECTS times on 1011 transient Google errors,
-        using the last known resumption handle to restore conversation state.
+        Retries up to _MAX_RECONNECTS times on 1011 transient Google errors.
+        Each retry is a clean session restart (no resumption handle — Vertex AI only).
         """
         retry = 0
         while True:
             run_config = RunConfig(
                 streaming_mode=StreamingMode.BIDI,
-                session_resumption=genai_types.SessionResumptionConfig(
-                    handle=resumption_handle[0],
-                ),
-                context_window_compression=genai_types.ContextWindowCompressionConfig(
-                    sliding_window=genai_types.SlidingWindow(target_tokens=20000),
-                    trigger_tokens=25000,
-                ),
             )
             try:
                 async for event in runner.run_live(
@@ -127,11 +117,6 @@ async def websocket_session(websocket: WebSocket, session_id: str):
                     live_request_queue=queue_ref[0],
                     run_config=run_config,
                 ):
-                    # Track the latest resumable handle for reconnect.
-                    upd = event.live_session_resumption_update
-                    if upd and upd.resumable and upd.new_handle:
-                        resumption_handle[0] = upd.new_handle
-
                     # Collect audio parts and send as a single JSON envelope.
                     audio_parts = []
                     if event.content and event.content.parts:
@@ -175,21 +160,27 @@ async def websocket_session(websocket: WebSocket, session_id: str):
                     retry += 1
                     backoff = _RECONNECT_BACKOFF_BASE * (2 ** (retry - 1))
                     print(
-                        f"[send_events] 1011 error — reconnect attempt {retry}/{_MAX_RECONNECTS} "
-                        f"in {backoff:.0f}s (handle={'set' if resumption_handle[0] else 'none'})",
+                        f"[send_events] 1011 error — clean restart attempt {retry}/{_MAX_RECONNECTS} "
+                        f"in {backoff:.0f}s",
                         flush=True,
                     )
                     await asyncio.sleep(backoff)
                     # Swap to a fresh queue; receive_audio picks it up via queue_ref.
                     queue_ref[0].close()
                     queue_ref[0] = LiveRequestQueue()
+                    # Re-send greeting so Melody opens the new session.
+                    queue_ref[0].send_content(
+                        content=genai_types.Content(
+                            role="user",
+                            parts=[genai_types.Part(text="Hello")],
+                        )
+                    )
                 else:
                     print(f"[send_events] error: {exc}", flush=True)
                     raise
 
     # Kick off Melody's opening greeting — without this, BIDI mode waits
     # for the user to speak first and the session appears stalled.
-    # Only sent on first connect; reconnects restore state via resumption handle.
     queue_ref[0].send_content(
         content=genai_types.Content(
             role="user",
