@@ -31,6 +31,7 @@ def _after_tool(tool, args, tool_context, tool_response):
     print(f"[tool] {tool.name} END   | elapsed={elapsed:.1f}s", flush=True)
 
     if tool.name == "google_search" and isinstance(tool_response, str):
+        tool_context.state["search_ran"] = True
         if len(tool_response) > _SEARCH_RESULT_CHAR_LIMIT:
             print(
                 f"[tool] google_search truncating response "

@@ -3,6 +3,7 @@
 from google.adk.tools import ToolContext
 
 
+
 def build_job_query(tool_context: ToolContext, state: dict) -> dict:
     """Build a Google search query for job postings from conversation state.
 
@@ -53,6 +54,21 @@ def emit_job_card(
     Appends a card dict to tool_context.state['pending_cards'] so the
     WebSocket handler can forward it to the browser as a JSON event.
     """
+    if not tool_context.state.get("search_ran"):
+        return {
+            "error": (
+                "You must call google_search before emit_job_card. "
+                "No search has been run in this session yet."
+            )
+        }
+
+    if not url.startswith("http") or "example.com" in url:
+        return {
+            "error": (
+                f"'{url}' is not a real job posting URL. Use only URLs from the google_search results."
+            )
+        }
+
     card = {
         "title": title,
         "company": company,
