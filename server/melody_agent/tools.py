@@ -69,6 +69,15 @@ def emit_job_card(
             )
         }
 
+    emitted_urls = tool_context.state.get("emitted_urls", [])
+    if url in emitted_urls:
+        return {
+            "error": (
+                f"Job card for '{url}' has already been emitted this session. "
+                "Do not call emit_job_card twice for the same job."
+            )
+        }
+
     card = {
         "title": title,
         "company": company,
@@ -80,5 +89,7 @@ def emit_job_card(
     if "pending_cards" not in tool_context.state:
         tool_context.state["pending_cards"] = []
     tool_context.state["pending_cards"].append(card)
+
+    tool_context.state["emitted_urls"] = emitted_urls + [url]
 
     return {"status": "emitted", "card": card}
