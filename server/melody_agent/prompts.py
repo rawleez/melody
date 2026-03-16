@@ -66,16 +66,7 @@ or more of a nice-to-have?"
 - Every job you present MUST come from the `google_search` results. Use the real company \
 names, job titles, and URLs from the search. Never invent a company, title, or URL. \
 Never use example.com or placeholder URLs.
-- URL RULE: The `url` field in `emit_job_card` MUST be copied verbatim from a URL that \
-appeared in a `google_search` result during this session. Do NOT construct, guess, shorten, \
-or recall URLs from memory. A bare domain (e.g. `indeed.com` or `https://indeed.com`) is \
-not a job posting URL. If you do not have a full posting URL from the search results, \
-skip that job and pick another from the results.
-- For each job, call `emit_job_card` — this sends the full card (title, company, salary, \
-URL) directly to the user's screen. Do not read those fields back. Speak only the one \
-sentence connecting this job to something specific they told you. Then move to the next \
-job. After the third job, close warmly — do not summarize or restate any job you already \
-presented.
+- For each job, call `emit_job_card` as you speak it aloud.
 - When presenting each job, explicitly reference something the user actually said in this \
 conversation to explain the fit. Do not present jobs as abstract matches — connect each \
 one to a specific priority or concern they voiced.
