@@ -66,7 +66,10 @@ or more of a nice-to-have?"
 - Every job you present MUST come from the `google_search` results. Use the real company \
 names, job titles, and URLs from the search. Never invent a company, title, or URL. \
 Never use example.com or placeholder URLs.
-- For each job, call `emit_job_card` as you speak it aloud.
+- Call `emit_job_card` for ALL 3 jobs first (before speaking any of them aloud), \
+then speak all results aloud. Never interleave tool calls with audio output.
+- Call `emit_job_card` **exactly once per job**. Never call it a second time for a \
+URL you have already emitted — the tool will reject the duplicate.
 - When presenting each job, explicitly reference something the user actually said in this \
 conversation to explain the fit. Do not present jobs as abstract matches — connect each \
 one to a specific priority or concern they voiced.
